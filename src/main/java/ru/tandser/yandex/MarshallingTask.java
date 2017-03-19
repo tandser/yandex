@@ -1,32 +1,31 @@
 package ru.tandser.yandex;
 
-import org.springframework.util.Assert;
-
-import javax.validation.constraints.NotNull;
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.Marshaller;
-import java.io.StringWriter;
-import java.util.Objects;
+import java.io.ByteArrayOutputStream;
 import java.util.concurrent.Callable;
-
-import static java.util.Objects.requireNonNull;
+import java.util.zip.GZIPOutputStream;
 
 /**
  * Этот класс представляет собой задачу по преобразованию объекта в
- * формат XML и предназначенную для выполнения в отдельном потоке.
+ * формат XML в виде массива байтов со сжатыми gzip-данными и
+ * предназначенную для выполнения в отдельном потоке.
  *
  * <p>Поскольку маршалинг осуществляется при помощи JAXB,
  * необходимо чтобы класс преобразуемого объекта соответствовал
  * соглашениям JAXB, а принимаемый конструктором JAXB-контекст был
  * должным образом сконфигурирован.
  *
- * <p>При преобразовании различных объектов одного класса как
- * правило разрешается пользоваться одним и тем же экземляром JAXB-
- * контекста.
+ * <p>Класс {@link JAXBContext} потокобезопасен, поэтому JAXB-
+ * контекст может быть создан однажды и использоваться повторно,
+ * чтобы избежать затрат на инициализацию метаданных несколько раз.
  *
  * @author Andrew Timokhin
  */
-public class MarshallingTask implements Callable<String> {
+public class MarshallingTask implements Callable<ByteArrayOutputStream> {
+
+    // увеличиваем размер буфера GZIPOutputStream с 512 байт до 8 Кбайт
+    private static final int BUFFER_SIZE = 8 * 1024;
 
     private JAXBContext jaxbContext;
     private Object      source;
@@ -37,10 +36,12 @@ public class MarshallingTask implements Callable<String> {
     }
 
     @Override
-    public String call() throws Exception {
-        Marshaller marshaller = jaxbContext.createMarshaller();
-        StringWriter stringWriter = new StringWriter();
-        marshaller.marshal(source, stringWriter);
-        return stringWriter.toString();
+    public ByteArrayOutputStream call() throws Exception {
+        ByteArrayOutputStream byteOutputStream = new ByteArrayOutputStream();
+        try (GZIPOutputStream gzipOutputStream = new GZIPOutputStream(byteOutputStream, BUFFER_SIZE)) {
+            Marshaller marshaller = jaxbContext.createMarshaller();
+            marshaller.marshal(source, gzipOutputStream);
+            return byteOutputStream;
+        }
     }
 }

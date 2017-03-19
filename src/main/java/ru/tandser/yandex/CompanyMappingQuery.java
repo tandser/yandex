@@ -19,6 +19,7 @@ public class CompanyMappingQuery extends MappingSqlQuery<Company> {
 
     public CompanyMappingQuery(DataSource dataSource) {
         super(dataSource, QUERY);
+        compile();
     }
 
     @Override
